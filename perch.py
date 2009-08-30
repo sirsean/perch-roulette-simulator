@@ -55,7 +55,8 @@ class Table:
 
 
 class PerchGame:
-    def __init__(self, startingCash=0, numTables=0, desiredEndingCash=None, numTurns=None):
+    def __init__(self, bet=10, startingCash=0, numTables=0, desiredEndingCash=None, numTurns=None):
+        self.bet = bet
         self.startingCash = startingCash
         self.currentCash = startingCash
         self.numTables = numTables
@@ -73,8 +74,6 @@ class PerchGame:
         currentColor = NONE
         turn = 1
         while True:
-            bet = calculate_kelly_bet(1, 0.51) * self.currentCash
-
             for table in tables:
                 table.spin()
 
@@ -89,22 +88,22 @@ class PerchGame:
                 if currentStreak == 4:
                     (color, streak) = table.get_streak()
                     if color != currentColor:
-                        self.currentCash += bet
+                        self.currentCash += self.bet
                         currentTable = None
                         wins += 1
                     else:
-                        self.currentCash -= bet
+                        self.currentCash -= self.bet
                         currentStreak = 5
                         losses += 1
                 elif currentStreak == 5:
                     (color, streak) = table.get_streak()
                     if color != currentColor:
-                        self.currentCash += (bet * 1.5)
+                        self.currentCash += (self.bet * 1.5)
                         currentTable = None
                         currentStreak = 0
                         wins += 1
                     else:
-                        self.currentCash -= (bet * 1.5)
+                        self.currentCash -= (self.bet * 1.5)
                         currentTable = None
                         currentStreak = 0
                         losses += 1
@@ -133,84 +132,95 @@ def calculate_kelly_bet(odds, probabilityOfWinning):
     f = (odds * probabilityOfWinning - (1.0 - probabilityOfWinning)) / odds
     return f
 
-def calculate_average_cash_and_turns(runs):
-    sumCash = 0.0
-    sumTurns = 0.0
-    for (cash, turns) in runs:
-        sumCash += cash
-        sumTurns += turns
-    averageCash = sumCash / len(runs)
-    averageTurns = sumTurns / len(runs)
-    return (averageCash, averageTurns)
+class PerchSimulator:
+    def __init__(self):
+        pass
 
-def determine_percentage_of_time_you_reached_goal(runs, goal):
-    timesReachedGoal = 0.0
-    for (cash, turns) in runs:
-        if cash >= goal:
-            timesReachedGoal += 1
-    return timesReachedGoal / len(runs)
+    def run(self):
+        wins = 0.0
+        losses = 0.0
+        startingBankroll = 1000
+        currentBankroll = startingBankroll
+        numberOfRuns = 5*52
+        desiredGoal = None
+        numTurns = 100
+        runs = []
+        for run in range(0, numberOfRuns):
+            playingWith = currentBankroll
+            bet = calculate_kelly_bet(1, 0.51) * playingWith
+            game = PerchGame(bet=bet, startingCash=playingWith, numTables=4, desiredEndingCash=desiredGoal, numTurns=numTurns)
+            (finalCash, numTurns, gameWins, gameLosses) = game.play()
+            #print "Played a game with $%s in %s turns" % (finalCash, numTurns)
+            runs.append((finalCash, numTurns))
+            currentBankroll += (finalCash - playingWith)
+            wins += gameWins
+            losses += gameLosses
 
-def determine_average_turns_to_win_or_bust(runs, goal):
-    """
-    Look over all your runs and determine the average number of turns it took to reach your goal, as well as the average of how many turns it took to bust.
-    Returns (average-turns-to-win, average-turns-to-bust)
-    """
-    sumWinTurns = 0.0
-    numWins = 0
-    sumBustTurns = 0.0
-    numBusts = 0
-    for (cash, turns) in runs:
-        if cash <= 0:
-            sumBustTurns += turns
-            numBusts += 1
-        elif cash >= goal:
-            sumWinTurns += turns
-            numWins += 1
-    return ( sumWinTurns/numWins , sumBustTurns/numBusts )
+        (averageCash, averageTurns) = self.calculate_average_cash_and_turns(runs)
+        print "Averaged $%s in %s turns" % (averageCash, averageTurns)
 
-def determine_odds_of_busting(runs):
-    numBusts = 0.0
-    for (cash, turns) in runs:
-        if cash <= 0:
-            numBusts += 1
-    return numBusts / len(runs)
+        if desiredGoal is not None:
+            percentageReachedGoal = self.determine_percentage_of_time_you_reached_goal(runs, desiredGoal) * 100
+            (averageTurnsToWin, averageTurnsToBust) = self.determine_average_turns_to_win_or_bust(runs, desiredGoal)
+            print "Reached goal %s%% of the time, in %s runs" % (percentageReachedGoal, numberOfRuns)
+            print "Average turns to win: %s. Average turns to bust: %s" % (averageTurnsToWin, averageTurnsToBust)
+
+        if numTurns is not None:
+            percentageBusted = self.determine_odds_of_busting(runs) * 100
+            print "Busted %s%% of the time" % percentageBusted
+
+        print "Turned $%s into $%s in %s games" % (startingBankroll, currentBankroll, numberOfRuns)
+
+        winningPercentage = (wins / (wins + losses))
+        print "Won %s%% of the time" % (winningPercentage * 100)
+
+        kellyBet = calculate_kelly_bet(1, winningPercentage)
+        print "Should have been betting %s%% of bankroll each time" % (kellyBet * 100)
+
+    def calculate_average_cash_and_turns(self, runs):
+        sumCash = 0.0
+        sumTurns = 0.0
+        for (cash, turns) in runs:
+            sumCash += cash
+            sumTurns += turns
+        averageCash = sumCash / len(runs)
+        averageTurns = sumTurns / len(runs)
+        return (averageCash, averageTurns)
+
+    def determine_percentage_of_time_you_reached_goal(self, runs, goal):
+        timesReachedGoal = 0.0
+        for (cash, turns) in runs:
+            if cash >= goal:
+                timesReachedGoal += 1
+        return timesReachedGoal / len(runs)
+
+    def determine_average_turns_to_win_or_bust(self, runs, goal):
+        """
+        Look over all your runs and determine the average number of turns it took to reach your goal, as well as the average of how many turns it took to bust.
+        Returns (average-turns-to-win, average-turns-to-bust)
+        """
+        sumWinTurns = 0.0
+        numWins = 0
+        sumBustTurns = 0.0
+        numBusts = 0
+        for (cash, turns) in runs:
+            if cash <= 0:
+                sumBustTurns += turns
+                numBusts += 1
+            elif cash >= goal:
+                sumWinTurns += turns
+                numWins += 1
+        return ( sumWinTurns/numWins , sumBustTurns/numBusts )
+
+    def determine_odds_of_busting(self, runs):
+        numBusts = 0.0
+        for (cash, turns) in runs:
+            if cash <= 0:
+                numBusts += 1
+        return numBusts / len(runs)
+
 
 if __name__ == '__main__':
-    wins = 0.0
-    losses = 0.0
-    startingBankroll = 1000
-    currentBankroll = startingBankroll
-    numberOfRuns = 5*52
-    desiredGoal = None
-    numTurns = 100
-    runs = []
-    for run in range(0, numberOfRuns):
-        playingWith = currentBankroll
-        game = PerchGame(startingCash=playingWith, numTables=4, desiredEndingCash=desiredGoal, numTurns=numTurns)
-        (finalCash, numTurns, gameWins, gameLosses) = game.play()
-        #print "Played a game with $%s in %s turns" % (finalCash, numTurns)
-        runs.append((finalCash, numTurns))
-        currentBankroll += (finalCash - playingWith)
-        wins += gameWins
-        losses += gameLosses
+    simulator = PerchSimulator()
+    simulator.run()
 
-    (averageCash, averageTurns) = calculate_average_cash_and_turns(runs)
-    print "Averaged $%s in %s turns" % (averageCash, averageTurns)
-
-    if desiredGoal is not None:
-        percentageReachedGoal = determine_percentage_of_time_you_reached_goal(runs, desiredGoal) * 100
-        (averageTurnsToWin, averageTurnsToBust) = determine_average_turns_to_win_or_bust(runs, desiredGoal)
-        print "Reached goal %s%% of the time, in %s runs" % (percentageReachedGoal, numberOfRuns)
-        print "Average turns to win: %s. Average turns to bust: %s" % (averageTurnsToWin, averageTurnsToBust)
-
-    if numTurns is not None:
-        percentageBusted = determine_odds_of_busting(runs) * 100
-        print "Busted %s%% of the time" % percentageBusted
-
-    print "Turned $%s into $%s in %s games" % (startingBankroll, currentBankroll, numberOfRuns)
-
-    winningPercentage = (wins / (wins + losses))
-    print "Won %s%% of the time" % (winningPercentage * 100)
-
-    kellyBet = calculate_kelly_bet(1, winningPercentage)
-    print "Should have been betting %s%% of bankroll each time" % (kellyBet * 100)
