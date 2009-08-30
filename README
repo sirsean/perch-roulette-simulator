@@ -1,0 +1,9 @@
+
+This program simulates standing at a spot in a casino where you can see several roulette tables. If one table gets to a streak of four of the same color in a row, then you jump in and bet on the other color. If you win, go back to your perch. If you lose, then raise the bet by 50% and bet again; then go back to the perch whether you win or lose.
+
+To run it, just type:
+
+python perch.py
+
+And wait for it to finish and tell you how the simulation went.
+
